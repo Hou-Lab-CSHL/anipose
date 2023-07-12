@@ -194,7 +194,7 @@ def write_pose_2d(all_points, metadata, outname=None):
         [[scorer], bodyparts, ['x', 'y', 'likelihood']],
         names=['scorer', 'bodyparts', 'coords'])
 
-    dout = pd.DataFrame(columns=columns, index=index)
+    dout = pd.DataFrame(columns=columns, index=index, dtype='float64')
 
     dout.loc[:, (scorer, bodyparts, 'x')] = points[:, :, 0]
     dout.loc[:, (scorer, bodyparts, 'y')] = points[:, :, 1]
