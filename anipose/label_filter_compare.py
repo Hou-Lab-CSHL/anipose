@@ -58,7 +58,7 @@ def get_plotting_params(caps_2d):
     widths_2d = [round(p['width'] * height_2d/p['height']) for p in params_2d]
 
     width_total = sum(widths_2d)
-    height_total = height_2d * 3
+    height_total = height_2d * 4
 
     nframes = min([p['nframes'] for p in params_2d])
 
@@ -82,12 +82,9 @@ def get_start_image(pp):
     return start_img
 
 
-def draw_data(start_img, frames_raw, frames_2d, frames_2d_filt, pp):
+def draw_data(start_img, frames_raw, frames_2d, frames_2d_filt, frames_2d_proj, pp):
     height_2d = pp['height_2d']
     widths_2d = pp['widths_2d']
-
-    width_total = pp['width_total']
-    height_total = pp['height_total']
 
     frames_raw_resized = [cv2.resize(f, (w, height_2d))
                           for f, w in zip(frames_raw, widths_2d)]
@@ -97,20 +94,25 @@ def draw_data(start_img, frames_raw, frames_2d, frames_2d_filt, pp):
 
     frames_2d_filt_resized = [cv2.resize(f, (w, height_2d))
                               for f, w in zip(frames_2d_filt, widths_2d)]
+
+    frames_2d_proj_resized = [cv2.resize(f, (w, height_2d))
+                              for f, w in zip(frames_2d_proj, widths_2d)]
     
     imout = np.copy(start_img)
     imout[0:height_2d] = np.hstack(frames_raw_resized)
     imout[height_2d:height_2d*2] = np.hstack(frames_2d_resized)
     imout[height_2d*2:height_2d*3] = np.hstack(frames_2d_filt_resized)
+    imout[height_2d*3:height_2d*4] = np.hstack(frames_2d_proj_resized)
 
     return imout
 
 
-def visualize_compare(config, fnames_raw, fnames_2d, fnames_2d_filt, out_fname):
+def visualize_compare(config, fnames_raw, fnames_2d, fnames_2d_filt, fnames_2d_proj, out_fname):
 
     caps_raw = [cv2.VideoCapture(v) for v in fnames_raw]
     caps_2d = [cv2.VideoCapture(v) for v in fnames_2d]
     caps_2d_filt = [cv2.VideoCapture(v) for v in fnames_2d_filt]
+    caps_2d_proj = [cv2.VideoCapture(v) for v in fnames_2d_proj]
 
     pp = get_plotting_params(caps_2d)
     nframes = pp['nframes']
@@ -131,10 +133,11 @@ def visualize_compare(config, fnames_raw, fnames_2d, fnames_2d_filt, out_fname):
         ret0, frames_raw = read_frames(caps_raw)
         ret1, frames_2d = read_frames(caps_2d)
         ret2, frames_2d_filt = read_frames(caps_2d_filt)
-        if not all([ret0, ret1, ret2]):
+        ret3, frames_2d_proj = read_frames(caps_2d_proj)
+        if not all([ret0, ret1, ret2, ret3]):
             break
 
-        imout = draw_data(start_img, frames_raw, frames_2d, frames_2d_filt, pp)
+        imout = draw_data(start_img, frames_raw, frames_2d, frames_2d_filt, frames_2d_proj, pp)
         q.put(imout)
 
     for cap in caps_raw:
@@ -143,15 +146,18 @@ def visualize_compare(config, fnames_raw, fnames_2d, fnames_2d_filt, out_fname):
         cap.release()
     for cap in caps_2d_filt:
         cap.release()
+    for cap in caps_2d_proj:
+        cap.release()
 
     q.put(None)
     thread.join()
     writer.release()
 
 def process_session(config, session_path):
+    pipeline_videos_raw = config['pipeline']['videos_raw']
     pipeline_videos_labeled_2d = config['pipeline']['videos_labeled_2d']
     pipeline_videos_labeled_2d_filter = config['pipeline']['videos_labeled_2d_filter']
-    pipeline_videos_raw = config['pipeline']['videos_raw']
+    pipeline_videos_2d_projected = config['pipeline']['videos_2d_projected']
     pipeline_videos_compare = config['pipeline']['videos_compare']
 
     video_ext = config['video_extension']
@@ -186,6 +192,11 @@ def process_session(config, session_path):
                                          pipeline_videos_labeled_2d_filter,
                                          true_basename(f) + '.mp4')
                             for f in vids_raw]
+
+        vids_2d_projected = [os.path.join(session_path,
+                                         pipeline_videos_2d_projected,
+                                         true_basename(f) + '.mp4')
+                            for f in vids_raw]
         
         if not all([os.path.exists(f) for f in vids_2d]):
             print(out_fname, 'missing labeled 2d videos')
@@ -195,9 +206,13 @@ def process_session(config, session_path):
             print(out_fname, 'missing labeled filtered 2d videos')
             continue
 
+        if not all([os.path.exists(f) for f in vids_2d_projected]):
+            print(out_fname, 'missing labeled filtered 2d videos')
+            continue
+
         print(out_fname)
         
-        visualize_compare(config, vids_raw, vids_2d, vids_2d_filtered, out_fname)
+        visualize_compare(config, vids_raw, vids_2d, vids_2d_filtered, vids_2d_projected, out_fname)
 
 
 label_filter_compare_all = make_process_fun(process_session)
