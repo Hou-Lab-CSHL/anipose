@@ -7,6 +7,7 @@ import pandas as pd
 import cv2
 import skvideo.io
 from tqdm import trange
+import itertools
 
 from matplotlib.pyplot import get_cmap
 
@@ -25,19 +26,18 @@ def connect(img, points, bps, bodyparts, col=(0,255,0,255)):
         pb = tuple(np.int32(points[b]))
         cv2.line(img, tuple(pa), tuple(pb), col, 4)
 
-def connect_all(img, points, scheme, bodyparts):
-    cmap = get_cmap('tab10')
-    for cnum, bps in enumerate(scheme):
-        col = cmap(cnum % 10, bytes=True)
+def connect_all(img, points, scheme, bodyparts, bp_to_color):
+    for bps in scheme:
+        col = bp_to_color[bps[0]]
         col = [int(c) for c in col]
+        # breakpoint()
         connect(img, points, bps, bodyparts, col)
 
 
-def label_frame(img, points, scheme, bodyparts, cmap='tab10'):
+def label_frame(img, points, scheme, bodyparts, bp_to_color):
     n_joints, _ = points.shape
 
-    cmap_c = get_cmap(cmap)
-    connect_all(img, points, scheme, bodyparts)
+    connect_all(img, points, scheme, bodyparts, bp_to_color)
 
     for lnum, (x, y) in enumerate(points):
         if np.isnan(x) or np.isnan(y):
@@ -46,9 +46,13 @@ def label_frame(img, points, scheme, bodyparts, cmap='tab10'):
         y = np.clip(y, 1, img.shape[0]-1)
         x = int(round(x))
         y = int(round(y))
-        # col = cmap_c(lnum % 10, bytes=True)
-        # col = [int(c) for c in col]
-        col = (255, 255, 255)
+
+        # breakpoint()
+        # Andrew change: enable colored dots for 2D labels
+        # col = (255, 255, 255)
+        bp = bodyparts[lnum]
+        col = bp_to_color[bp]
+        col = [int(c) for c in col]
         cv2.circle(img,(x,y), 7, col[:3], -1)
 
     return img
@@ -93,6 +97,8 @@ def visualize_labels(config, labels_fname, vid_fname, outname):
     last = len(dlabs)
 
     cmap = get_cmap('tab10')
+    bp_to_cnum = {bp: cnum % 10 for cnum, bps in enumerate(scheme) for bp in bps}
+    bp_to_color = {bp: cmap(cnum, bytes=True) for bp, cnum in bp_to_cnum.items()}
 
     points = [(dlabs[bp]['x'], dlabs[bp]['y']) for bp in bodyparts]
     points = np.array(points)
@@ -115,7 +121,7 @@ def visualize_labels(config, labels_fname, vid_fname, outname):
 
         img = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
         points = all_points[:, :, ix]
-        img = label_frame(img, points, scheme, bodyparts)
+        img = label_frame(img, points, scheme, bodyparts, bp_to_color)
 
         writer.writeFrame(img)
 
