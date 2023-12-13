@@ -93,7 +93,11 @@ def visualize_labels(config, labels_fname, outname, fps=300):
         # '-hwaccel': 'auto',
         '-framerate': str(fps),
     }, outputdict={
-        '-vcodec': 'h264', '-qp': '28', '-pix_fmt': 'yuv420p'
+        # '-vcodec': 'h264', 
+        # TODO: Automatically choose between h264 and h264_videotoolbox if available on mac
+        '-vcodec': 'h264_videotoolbox', 
+        '-qp': '28', 
+        '-pix_fmt': 'yuv420p'
     })
 
     cmap = get_cmap('tab10')
@@ -118,12 +122,25 @@ def visualize_labels(config, labels_fname, outname, fps=300):
                         scale_mode='none', scale_factor=scale_factor)
     lines = connect_all(points, scheme, bp_dict, cmap)
     mlab.orientation_axes()
-
     view = list(mlab.view())
-
     mlab.view(focalpoint='auto', distance='auto')
+    rot_speed = np.pi / config['labeling'].get('3d_orbit_speed', 180.0)
+    rot_size = config['labeling'].get('3d_orbit_size', 0.25)
+    view[0] += config['labeling'].get('3d_init_azimuth', 0)
+    view[1] += config['labeling'].get('3d_init_elevation', 0)
+    roll = config['labeling'].get('3d_init_roll', 0)
+    mlab.view(*view, reset_roll=False, roll=roll)
+    orig_view = view.copy()
 
     for framenum in trange(data.shape[0], ncols=70):
+
+        # Andrew: short videos for testing
+        stop = 1000
+        if framenum > stop:
+            print(f"Stopping at frame {stop}")
+            exit()
+
+
         fig.scene.disable_render = True
 
         if framenum in framedict:
@@ -142,8 +159,20 @@ def visualize_labels(config, labels_fname, outname, fps=300):
 
         img = mlab.screenshot()
 
-        mlab.view(*view, reset_roll=False)
+        if config['labeling'].get('3d_orbit', False):
+            view[0] = orig_view[0] + np.sin(rot_speed*framenum)*rot_size
+            view[1] = orig_view[1] + np.cos(rot_speed*framenum)*rot_size
 
+        # Hack to understand camera orientation 
+        if True:
+            # For position testing
+            az = framenum * 0.5
+            # az = 0
+            roll = framenum * 0.1
+            view[0] = orig_view[0] + az
+            mlab.title(f"{framenum=}, {az=}, {roll=}", color=(0, 0, 0))
+
+        mlab.view(*view, reset_roll=False, roll=roll)
         writer.writeFrame(img)
 
     mlab.close(all=True)
