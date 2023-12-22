@@ -9,9 +9,23 @@ import skvideo.io
 from tqdm import trange
 import itertools
 
+from matplotlib import colormaps
 from matplotlib.pyplot import get_cmap
 
 from .common import make_process_fun, natural_keys, get_nframes
+
+def tiny_cmap(center, delta, n, cmap="viridis_r"):
+    return list(colormaps[cmap](np.linspace(center - delta, center + delta, n), bytes=True))
+
+def color_scheme(scheme, cmap="viridis_r", spread=0.008):    
+    bp_to_color = {}
+    cluster_centers = np.linspace(0, 0.8, len(scheme))
+    for idx, cluster in enumerate(scheme):
+        cluster_size = len(cluster)
+        cluster_cmap = tiny_cmap(cluster_centers[idx], spread, cluster_size)
+        for bp in cluster:
+            bp_to_color[bp] = [int(c) for c in cluster_cmap.pop()]
+    return bp_to_color
 
 def connect(img, points, bps, bodyparts, col=(0,255,0,255)):
     try:
@@ -29,8 +43,6 @@ def connect(img, points, bps, bodyparts, col=(0,255,0,255)):
 def connect_all(img, points, scheme, bodyparts, bp_to_color):
     for bps in scheme:
         col = bp_to_color[bps[0]]
-        col = [int(c) for c in col]
-        # breakpoint()
         connect(img, points, bps, bodyparts, col)
 
 
@@ -47,12 +59,7 @@ def label_frame(img, points, scheme, bodyparts, bp_to_color):
         x = int(round(x))
         y = int(round(y))
 
-        # breakpoint()
-        # Andrew change: enable colored dots for 2D labels
-        # col = (255, 255, 255)
-        bp = bodyparts[lnum]
-        col = bp_to_color[bp]
-        col = [int(c) for c in col]
+        col = bp_to_color[bodyparts[lnum]]
         cv2.circle(img,(x,y), 7, col[:3], -1)
 
     return img
@@ -96,9 +103,8 @@ def visualize_labels(config, labels_fname, vid_fname, outname):
 
     last = len(dlabs)
 
-    cmap = get_cmap('tab10')
-    bp_to_cnum = {bp: cnum % 10 for cnum, bps in enumerate(scheme) for bp in bps}
-    bp_to_color = {bp: cmap(cnum, bytes=True) for bp, cnum in bp_to_cnum.items()}
+    cmap = get_cmap(config['labeling'].get('colormap', 'tab10'))
+    bp_to_color = color_scheme(scheme, cmap=cmap)
 
     points = [(dlabs[bp]['x'], dlabs[bp]['y']) for bp in bodyparts]
     points = np.array(points)
