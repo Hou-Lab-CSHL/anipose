@@ -9,20 +9,29 @@ import skvideo.io
 from tqdm import trange
 import itertools
 
-from matplotlib import colormaps
+from matplotlib import colors
 from matplotlib.pyplot import get_cmap
+from seaborn import color_palette
 
 from .common import make_process_fun, natural_keys, get_nframes
 
-def tiny_cmap(center, delta, n, cmap="viridis_r"):
-    return list(colormaps[cmap](np.linspace(center - delta, center + delta, n), bytes=True))
+def tiny_cmap(center, delta, n, cmap = "colorblind"):
+    if isinstance(cmap, str):
+        _cmap = color_palette(cmap, as_cmap=True)
+    else:
+        _cmap = cmap
 
-def color_scheme(scheme, cmap="viridis_r", spread=0.008):    
+    if isinstance(_cmap, list):
+        _cmap = colors.LinearSegmentedColormap.from_list("tiny_cmap", _cmap)
+
+    return list(_cmap(np.linspace(center - delta, center + delta, n), bytes=True))
+
+def color_scheme(scheme, cmap="colorblind", spread=0.02):
     bp_to_color = {}
-    cluster_centers = np.linspace(0, 0.8, len(scheme))
+    cluster_centers = np.linspace(0, 1, len(scheme))
     for idx, cluster in enumerate(scheme):
         cluster_size = len(cluster)
-        cluster_cmap = tiny_cmap(cluster_centers[idx], spread, cluster_size)
+        cluster_cmap = tiny_cmap(cluster_centers[idx], spread, cluster_size, cmap)
         for bp in cluster:
             bp_to_color[bp] = [int(c) for c in cluster_cmap.pop()]
     return bp_to_color

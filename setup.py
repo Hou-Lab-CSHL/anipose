@@ -34,6 +34,7 @@ setuptools.setup(
         'tqdm',
         'click',
         'scikit-video',
+        'seaborn',
         'flask', 'flask-compress', 'flask-ipban'
     ],
     extras_require={
