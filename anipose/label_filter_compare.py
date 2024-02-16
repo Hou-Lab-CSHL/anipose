@@ -43,6 +43,7 @@ def turn_to_black(frame):
 
 def read_frames(caps_2d):
     frames_2d = []
+    ret = True
     for cap in caps_2d:
         ret, frame = cap.read()
         if not ret:
@@ -52,13 +53,13 @@ def read_frames(caps_2d):
     return ret, frames_2d
 
 
-def get_plotting_params(caps_2d):
+def get_plotting_params(caps_2d, filtered = True):
     params_2d = [get_video_params_cap(c) for c in caps_2d]
     height_2d = max([p['height'] for p in params_2d])
     widths_2d = [round(p['width'] * height_2d/p['height']) for p in params_2d]
 
     width_total = sum(widths_2d)
-    height_total = height_2d * 4
+    height_total = height_2d * 4 if filtered else height_2d * 3
 
     nframes = min([p['nframes'] for p in params_2d])
 
@@ -88,7 +89,7 @@ def draw_data(start_img, frames_raw, frames_2d, frames_2d_filt, frames_2d_proj, 
 
     frames_raw_resized = [cv2.resize(f, (w, height_2d))
                           for f, w in zip(frames_raw, widths_2d)]
-    
+
     frames_2d_resized = [cv2.resize(f, (w, height_2d))
                          for f, w in zip(frames_2d, widths_2d)]
 
@@ -97,24 +98,26 @@ def draw_data(start_img, frames_raw, frames_2d, frames_2d_filt, frames_2d_proj, 
 
     frames_2d_proj_resized = [cv2.resize(f, (w, height_2d))
                               for f, w in zip(frames_2d_proj, widths_2d)]
-    
+
     imout = np.copy(start_img)
     imout[0:height_2d] = np.hstack(frames_raw_resized)
     imout[height_2d:height_2d*2] = np.hstack(frames_2d_resized)
-    imout[height_2d*2:height_2d*3] = np.hstack(frames_2d_filt_resized)
-    imout[height_2d*3:height_2d*4] = np.hstack(frames_2d_proj_resized)
+    if len(frames_2d_filt_resized) > 0:
+        imout[height_2d*2:height_2d*3] = np.hstack(frames_2d_filt_resized)
+        imout[height_2d*3:height_2d*4] = np.hstack(frames_2d_proj_resized)
+    else:
+        imout[height_2d*2:height_2d*3] = np.hstack(frames_2d_proj_resized)
 
     return imout
 
 
 def visualize_compare(config, fnames_raw, fnames_2d, fnames_2d_filt, fnames_2d_proj, out_fname):
-
     caps_raw = [cv2.VideoCapture(v) for v in fnames_raw]
     caps_2d = [cv2.VideoCapture(v) for v in fnames_2d]
     caps_2d_filt = [cv2.VideoCapture(v) for v in fnames_2d_filt]
     caps_2d_proj = [cv2.VideoCapture(v) for v in fnames_2d_proj]
 
-    pp = get_plotting_params(caps_2d)
+    pp = get_plotting_params(caps_2d, filtered=(len(caps_2d_filt) > 0))
     nframes = pp['nframes']
     fps = pp['fps']
     start_img = get_start_image(pp)
@@ -176,10 +179,10 @@ def process_session(config, session_path):
 
     for vidname in sorted(fnames_raw.keys(), key=natural_keys):
         out_fname = os.path.join(outdir, vidname+'.mp4')
-        
+
         vids_raw = sorted(fnames_raw[vidname], key=natural_keys)
         vid_fname = vids_raw[0]
-        
+
         if os.path.exists(out_fname) and \
            abs(get_nframes(out_fname) - get_nframes(vid_fname)) < 100:
             continue
@@ -203,15 +206,15 @@ def process_session(config, session_path):
             continue
 
         if not all([os.path.exists(f) for f in vids_2d_filtered]):
-            print(out_fname, 'missing labeled filtered 2d videos')
-            continue
+            print(out_fname, 'missing labeled filtered 2d videos, will skip')
+            vids_2d_filtered = [f for f in vids_2d_filtered if os.path.exists(f)]
 
         if not all([os.path.exists(f) for f in vids_2d_projected]):
-            print(out_fname, 'missing labeled filtered 2d videos')
+            print(out_fname, 'missing labeled projected 2d videos')
             continue
 
         print(out_fname)
-        
+
         visualize_compare(config, vids_raw, vids_2d, vids_2d_filtered, vids_2d_projected, out_fname)
 
 
