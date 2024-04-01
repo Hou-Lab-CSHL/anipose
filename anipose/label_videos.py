@@ -87,6 +87,11 @@ def visualize_labels(config, labels_fname, vid_fname, outname):
     except KeyError:
         scheme = []
 
+    try:
+        bp_ignore = config['labeling']['ignore']
+    except KeyError:
+        bp_ignore = []
+
     if isinstance(labels_fname, str):
         dlabs = pd.read_hdf(labels_fname)
     elif isinstance(labels_fname, pd.DataFrame):
@@ -101,7 +106,7 @@ def visualize_labels(config, labels_fname, vid_fname, outname):
     if len(scheme) == 0:
         bodyparts = list(dlabs.columns.levels[0])
     else:
-        bodyparts = sorted(set([x for dx in scheme for x in dx]))
+        bodyparts = sorted(set([x for dx in scheme for x in dx if x not in bp_ignore]))
 
     cap = cv2.VideoCapture(vid_fname)
     # cap.set(1,0)
