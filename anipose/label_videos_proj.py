@@ -19,7 +19,7 @@ from .common import make_process_fun, get_nframes, \
     get_data_length, natural_keys, true_basename, find_calibration_folder
 
 from .triangulate import load_offsets_dict
-from .filter_pose import write_pose_2d
+from .filter_pose import load_pose_2d, write_pose_2d
 from .project_2d import get_projected_points
 from .label_videos import visualize_labels
 
@@ -79,39 +79,44 @@ def process_session(config, session_path):
         fnames_2d_current = fnames_2d[basename]
         fnames_2d_current = sorted(fnames_2d_current, key=natural_keys)
 
+        fnames_2d_proj = [os.path.join(outdir, true_basename(fname) + '.h5')
+                          for fname in fnames_2d_current]
         out_fnames = [os.path.join(outdir, true_basename(fname) + '.mp4')
                       for fname in fnames_2d_current]
 
         if all([os.path.exists(f) for f in out_fnames]):
             continue
 
-        # print(pose_fname)
+        if any(not os.path.exists(f) for f in out_fnames):
+            cam_names = [get_cam_name(config, fname)
+                         for fname in fnames_2d_current]
 
-        cam_names = [get_cam_name(config, fname)
-                     for fname in fnames_2d_current]
+            video_folder = os.path.join(session_path, pipeline_videos_raw)
+            offsets_dict = load_offsets_dict(config, cam_names, video_folder)
 
-        video_folder = os.path.join(session_path, pipeline_videos_raw)
-        offsets_dict = load_offsets_dict(config, cam_names, video_folder)
+            cgroup_subset = cgroup.subset_cameras_names(cam_names)
 
-        cgroup_subset = cgroup.subset_cameras_names(cam_names)
+            bodyparts, points_2d_proj, all_scores = get_projected_points(
+                config, fname_3d_current, cgroup_subset, offsets_dict)
 
-        bodyparts, points_2d_proj, all_scores = get_projected_points(
-            config, fname_3d_current, cgroup_subset, offsets_dict)
+            metadata = {
+                'scorer': 'scorer',
+                'bodyparts': bodyparts,
+                'index': np.arange(points_2d_proj.shape[2])
+            }
 
-        metadata = {
-            'scorer': 'scorer',
-            'bodyparts': bodyparts,
-            'index': np.arange(points_2d_proj.shape[2])
-        }
+            n_cams, n_joints, n_frames, _ = points_2d_proj.shape
 
-        n_cams, n_joints, n_frames, _ = points_2d_proj.shape
-        
-        pts = np.zeros((n_frames, n_joints, 3), dtype='float64')
-        
-        for cix, (cname, vidname, outname) in enumerate(zip(cam_names, fnames_2d_current, out_fnames)):
-            pts[:, :, :2] = points_2d_proj[cix].swapaxes(0, 1)
-            pts[:, :, 2] = all_scores.T
-            dlabs = write_pose_2d(pts, metadata, outname)
+            pts = np.zeros((n_frames, n_joints, 3), dtype='float64')
+
+        fnames_itr = zip(fnames_2d_current, fnames_2d_proj, out_fnames)
+        for cix, (vidname, projname, outname) in enumerate(fnames_itr):
+            if os.path.exists(projname):
+                dlabs = load_pose_2d(projname)
+            else:
+                pts[:, :, :2] = points_2d_proj[cix].swapaxes(0, 1)
+                pts[:, :, 2] = all_scores.T
+                dlabs = write_pose_2d(pts, metadata, projname)
 
             if os.path.exists(outname) and \
                abs(get_nframes(outname) - get_nframes(vidname)) < 50:
