@@ -112,7 +112,7 @@ def process_session(config, session_path):
         fnames_itr = zip(fnames_2d_current, fnames_2d_proj, out_fnames)
         for cix, (vidname, projname, outname) in enumerate(fnames_itr):
             if os.path.exists(projname):
-                dlabs = load_pose_2d(projname)
+                dlabs = projname
             else:
                 pts[:, :, :2] = points_2d_proj[cix].swapaxes(0, 1)
                 pts[:, :, 2] = all_scores.T
