@@ -122,7 +122,7 @@ def visualize_labels(config, labels_fname, outname, fps=300):
     }, outputdict={
         # '-vcodec': 'h264', 
         # TODO: Automatically choose between h264 and h264_videotoolbox if available on mac
-        '-vcodec': 'h264_videotoolbox', 
+        '-vcodec': 'libx264', 
         '-qp': '28', 
         '-pix_fmt': 'yuv420p'
     })
